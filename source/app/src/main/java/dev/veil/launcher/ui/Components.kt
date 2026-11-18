@@ -8,6 +8,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -61,7 +62,10 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.text.style.TextAlign
 import androidx.tv.material3.Border
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Glow
@@ -541,6 +545,81 @@ fun AllAppsPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
             Icon(VeilIcons.Grid, contentDescription = null, modifier = Modifier.size(13.dp), tint = LocalContentColor.current)
         }
         Text("All apps", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+private val TileShape = RoundedCornerShape(18.dp)
+
+/**
+ * A big branded tile: the app's TV banner, or its icon and name when it has none. The service tiles on
+ * Home and the grid in All apps. [pinned] adds the small pin badge (All apps only).
+ */
+@Composable
+fun BannerTile(
+    app: AppEntry,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    pinned: Boolean = false,
+) {
+    TileCard(onClick, onLongClick, modifier) {
+        val banner = app.banner
+        if (banner != null) {
+            Image(banner, contentDescription = app.label, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        } else {
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                app.icon?.let { Image(it, contentDescription = null, modifier = Modifier.size(34.dp).clip(CircleShape)) }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    app.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 8.dp),
+                )
+            }
+        }
+        if (pinned) {
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(7.dp).size(20.dp).clip(CircleShape).background(Veil.Accent),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(VeilIcons.Pin, contentDescription = "Pinned", modifier = Modifier.size(11.dp), tint = Veil.Ink)
+            }
+        }
+    }
+}
+
+/** The tile at the end of the Home row that opens All apps. */
+@Composable
+fun AllAppsTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    TileCard(onClick, null, modifier) {
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Box(Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                Icon(VeilIcons.Grid, contentDescription = null, modifier = Modifier.size(15.dp), tint = Veil.Text)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text("All apps", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/** Rounded card with the glass tilt and glint, a white outline when focused, and the "move" tick. */
+@Composable
+private fun TileCard(
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
+    modifier: Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val glass = rememberGlassMotion()
+    Card(
+        onClick = { Sfx.select(); onClick() },
+        onLongClick = onLongClick,
+        modifier = modifier.focusSound().glassTilt(glass),
+        shape = CardDefaults.shape(TileShape),
+        scale = CardDefaults.scale(focusedScale = 1.05f),
+        border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.5.dp, Veil.Text), shape = TileShape)),
+        colors = CardDefaults.colors(containerColor = Color(0xFF22252C), focusedContainerColor = Color(0xFF2C3038)),
+    ) {
+        Box(Modifier.fillMaxSize().glassGlint(glass), content = content)
     }
 }
 

@@ -437,7 +437,7 @@ private fun ArtworkFace(items: List<WatchItem>) {
             if (it != null) {
                 Column(Modifier.widthIn(max = 620.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        if (it.upNext) "UP NEXT" else "CONTINUE",
+                        it.spotlight?.uppercase() ?: if (it.upNext) "UP NEXT" else "CONTINUE",
                         fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, color = Veil.Accent,
                     )
                     TitleOrLogo(it, fontSize = 40.sp, maxLogoHeight = 120.dp)

@@ -14,6 +14,7 @@ import dev.veil.launcher.data.ContinueWatching
 import dev.veil.launcher.data.NextDnsStats
 import dev.veil.launcher.data.NowPlaying
 import dev.veil.launcher.data.PrivateDns
+import dev.veil.launcher.data.Spotlight
 import dev.veil.launcher.data.Weather
 import dev.veil.launcher.data.Tmdb
 import dev.veil.launcher.data.Trakt
@@ -65,6 +66,14 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     var editingClientId by mutableStateOf(false)
         private set
     var sheet by mutableStateOf<AppSheet?>(null)
+
+    /** Popular/trending artwork per service tile (package → items), for the Home backdrop and Ambient. */
+    var spotlight by mutableStateOf<Map<String, List<WatchItem>>>(emptyMap())
+        private set
+    /** Package of the Home tile that has focus; null while focus is on Continue Watching. */
+    var focusedApp by mutableStateOf<String?>(null)
+    private var lastSpotlight = 0L
+    private var spotlightLoading = false
 
     /** Ordered package names pinned to the Home row. */
     var pins by mutableStateOf(loadPins())
@@ -204,7 +213,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
             try {
                 val result = withContext(Dispatchers.IO) { ContinueWatching.load(trakt, tmdb) }
                 items = result
-                VeilCache.items = result
+                VeilCache.items = result.ifEmpty { spotlight.values.flatten() }
                 val keep = result.firstOrNull { it.key == focused?.key }
                 focused = keep ?: result.firstOrNull()
                 focusedIndex = if (keep != null) result.indexOf(keep) else 0
@@ -214,6 +223,26 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
             } finally {
                 loading = false
                 connected = trakt.isConnected
+            }
+        }
+    }
+
+    /** What's popular on each service, refreshed every 6 h. Needs the TMDB key; otherwise a no-op. */
+    fun refreshSpotlight(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (spotlightLoading || (!force && now - lastSpotlight < 6 * 3600_000L)) return
+        spotlightLoading = true
+        scope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) { Spotlight.load(tmdb) }
+                if (result.values.any { it.isNotEmpty() }) {
+                    spotlight = result
+                    lastSpotlight = now
+                    // Ambient slideshow: Continue Watching when there is one, otherwise these.
+                    if (!connected || VeilCache.items.isEmpty()) VeilCache.items = result.values.flatten()
+                }
+            } finally {
+                spotlightLoading = false
             }
         }
     }
@@ -620,10 +649,6 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
 
     companion object {
         const val NUVIO = "com.nuvio.tv"
-        val DEFAULT_PINS = listOf(
-            "io.gh.reisxd.tizentube.cobalt",
-            NUVIO,
-            "com.spotify.tv.android",
-        )
+        val DEFAULT_PINS = listOf(Spotlight.NETFLIX, Spotlight.PRIME, Spotlight.STREMIO)
     }
 }

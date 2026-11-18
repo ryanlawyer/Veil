@@ -49,8 +49,6 @@ import dev.veil.launcher.LauncherState
 import dev.veil.launcher.data.AppEntry
 import kotlinx.coroutines.delay
 
-private val TileShape = RoundedCornerShape(18.dp)
-
 @Composable
 fun DrawerScreen(state: LauncherState) {
     val firstFocus = remember { FocusRequester() }
@@ -83,51 +81,14 @@ fun DrawerScreen(state: LauncherState) {
             modifier = Modifier.fillMaxSize(),
         ) {
             itemsIndexed(state.apps, key = { _, a -> a.pkg }) { i, app ->
-                AppTile(
+                BannerTile(
                     app = app,
                     pinned = state.isPinned(app),
                     onClick = { state.launch(app) },
                     onLongClick = { state.sheet = AppSheet(app, fromHome = false) },
-                    modifier = if (i == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                        .then(if (i == 0) Modifier.focusRequester(firstFocus) else Modifier),
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AppTile(app: AppEntry, pinned: Boolean, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier) {
-    val glass = rememberGlassMotion()
-    Card(
-        onClick = { Sfx.select(); onClick() },
-        onLongClick = onLongClick,
-        modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f).focusSound().glassTilt(glass),
-        shape = CardDefaults.shape(TileShape),
-        scale = CardDefaults.scale(focusedScale = 1.05f),
-        border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.5.dp, Veil.Text), shape = TileShape)),
-        colors = CardDefaults.colors(containerColor = Color(0xFF22252C), focusedContainerColor = Color(0xFF2C3038)),
-    ) {
-        Box(Modifier.fillMaxSize().glassGlint(glass)) {
-            val banner = app.banner
-            if (banner != null) {
-                Image(banner, contentDescription = app.label, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            } else {
-                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    app.icon?.let { Image(it, contentDescription = null, modifier = Modifier.size(34.dp).clip(CircleShape)) }
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        app.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 8.dp),
-                    )
-                }
-            }
-            if (pinned) {
-                Box(
-                    Modifier.align(Alignment.TopEnd).padding(7.dp).size(20.dp).clip(CircleShape).background(Veil.Accent),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(VeilIcons.Pin, contentDescription = "Pinned", modifier = Modifier.size(11.dp), tint = Veil.Ink)
-                }
             }
         }
     }

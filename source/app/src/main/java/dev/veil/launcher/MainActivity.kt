@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity() {
         state.refreshExtras()
         state.refreshApps()
         state.refreshWatching()
+        state.refreshSpotlight()
     }
 
     override fun onNewIntent(intent: Intent) {

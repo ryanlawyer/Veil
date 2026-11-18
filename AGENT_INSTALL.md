@@ -173,10 +173,12 @@ launcher to "fix" the flash (rule 1).
 
 Guide them through, and confirm each works:
 1. **Home** shows Veil. Press Home inside another app: it comes back to Veil.
-2. **Connect Trakt**: shows a code, they enter it at trakt.tv/activate, and Continue watching fills in.
+2. **Connect Trakt** (optional, under *All apps*): shows a code, they enter it at trakt.tv/activate, and a
+   Continue watching row appears on Home. Without Trakt, Home is just the service tiles.
 3. **Artwork and logos** load. If they're missing, the TMDB key is wrong.
-4. **Apps row**: Veil starts with TizenTube, Nuvio and Spotify pinned. Any of them that isn't installed is
-   simply left out (the row always ends with *All apps*). Help them pin their own apps: *All apps* → hold
+4. **Service tiles**: Veil starts with Netflix, Prime Video and Stremio pinned. Any of them that isn't
+   installed is simply left out (the row always ends with *All apps*). Focusing a tile shows what's popular
+   on that service as the backdrop (needs the TMDB key); without it the tile's name is shown instead. Help them pin their own apps: *All apps* → hold
    OK on an app → *Pin to Home*. Pinned apps can be moved left/right the same way.
 5. **Veil menu** (the "veil" wordmark top left): theme, weather city, music mode (album art + lyrics, or
    visualizer), visualizer settings.

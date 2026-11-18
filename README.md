@@ -22,9 +22,11 @@ More in [`screenshots/`](screenshots).
 
 ## What you get
 
-- **Home**: full-screen artwork of the show or film you're on, with its title logo and a slow pan and zoom.
-  The accent colour follows the artwork. Rows for **Continue watching** (from your Trakt account; opens the
-  episode in Nuvio) and your **apps** (pin and reorder them). Clock and weather at the top.
+- **Home**: built around **Netflix, Prime Video and Stremio** as big branded tiles (pin and reorder any app;
+  *All apps* is always at the end). Move onto a service and the screen fills with what's popular there:
+  full-screen artwork with its title logo and a slow pan and zoom, a new title every 15 seconds. The accent
+  colour follows the artwork. Sign in to Trakt and a **Continue watching** row appears above the tiles
+  (opens the episode in Nuvio). Clock and weather at the top.
 - **Privacy pill**: one switch for system-wide ad and tracker blocking via encrypted DNS (NextDNS if you
   have it, otherwise AdGuard DNS), with "pause for 15 minutes / 1 hour" for sites that break. With NextDNS
   it also shows how many trackers it blocked.
@@ -69,7 +71,8 @@ A TV can't ask for these with a pop-up, so they're granted over ADB (the install
 ## Privacy
 
 - **No accounts, analytics, ads or Veil servers.** Veil talks directly to these services over HTTPS:
-  - **TMDB**: titles of what you're watching, to get artwork.
+  - **TMDB**: titles of what you're watching, to get artwork; and what's popular on Netflix and Prime Video
+    in your region, plus the weekly trending list, for the service tiles.
   - **Trakt**: reads your watch progress with your own login and, only when you ask, marks items watched
     or removes them from Continue Watching (clears paused progress, hides the show from progress).
   - **Open-Meteo**: your chosen city, for the weather.

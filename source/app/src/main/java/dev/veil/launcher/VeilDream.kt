@@ -22,6 +22,7 @@ import dev.veil.launcher.data.NowPlaying
 import dev.veil.launcher.data.PrivateDns
 import dev.veil.launcher.data.Tmdb
 import dev.veil.launcher.data.Trakt
+import dev.veil.launcher.data.Spotlight
 import dev.veil.launcher.data.VeilCache
 import dev.veil.launcher.data.Weather
 import dev.veil.launcher.ui.AmbientScreen
@@ -106,6 +107,9 @@ class VeilDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
                     val trakt = Trakt(ctx)
                     if (trakt.isConnected) runCatching { ContinueWatching.load(trakt, Tmdb(BuildConfig.TMDB_KEY)) }
                         .getOrNull()?.let { items = it; VeilCache.items = it }
+                    // No Trakt (or nothing in progress): what's popular on the Home services instead.
+                    if (items.isEmpty()) runCatching { Spotlight.load(Tmdb(BuildConfig.TMDB_KEY)) }.getOrNull()
+                        ?.values?.flatten()?.takeIf { it.isNotEmpty() }?.let { items = it; VeilCache.items = it }
                 }
                 if (weather == null) Weather(ctx).current()?.let { weather = it; VeilCache.weather = it }
                 if (blocked == null && dns.isOn) NextDnsStats.blockedLast24h()?.let { blocked = it; VeilCache.blocked = it }

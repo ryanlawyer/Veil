@@ -25,6 +25,10 @@ data class WatchItem(
     val thumb: String? = null,
     val logo: String? = null,
     val poster: String? = null,
+    /** Spotlight items (popular on a service): the eyebrow line, e.g. "Popular on Netflix". */
+    val spotlight: String? = null,
+    /** Spotlight items: shown instead of the episode line, e.g. "Series · 2024". */
+    val tagline: String? = null,
 ) {
     val key: String get() = if (isMovie) "m:${imdb ?: title}" else "s:${traktId ?: title}"
 
@@ -37,7 +41,7 @@ data class WatchItem(
 
     /** Hero line: "Season 7 · Episode 13 — Funeral (1)". */
     val heroLine: String
-        get() = if (isMovie) "Movie" else buildString {
+        get() = tagline ?: if (isMovie) "Movie" else buildString {
             append("Season $season · Episode $episode")
             episodeTitle?.let { append(" — ").append(it) }
         }

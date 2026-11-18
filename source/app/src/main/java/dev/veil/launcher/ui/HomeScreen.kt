@@ -3,10 +3,8 @@
 package dev.veil.launcher.ui
 
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.animateFloatAsState
@@ -15,11 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -43,13 +37,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -75,22 +69,49 @@ import dev.veil.launcher.data.WatchItem
 import kotlinx.coroutines.delay
 
 private val EDGE = 48.dp
+/** Service tiles: 16:9 like the TV banners they show. All apps is a square of the same height. */
+private val TILE_W = 220.dp
+private val TILE_H = 124.dp
+/** How long each spotlight title stays up before the next one, while a service tile is focused. */
+private const val SPOTLIGHT_MS = 15_000L
 
 @Composable
 fun HomeScreen(state: LauncherState) {
-    val hero = state.focused ?: state.items.firstOrNull()
+    // Continue Watching only exists with a Trakt sign-in. Without one, Home is the service tiles.
+    val showRow = state.connected
     val firstFocus = remember { FocusRequester() }
     val requesters = remember { HashMap<String, FocusRequester>() }
     val focusKey: (String) -> FocusRequester = { k -> requesters.getOrPut(k) { FocusRequester() } }
 
     // On start and each time Home is pressed: go back to the item last used on Home (e.g. the app you
-    // launched); fall back to the first Continue Watching pill.
+    // launched); fall back to the first tile (or the first Continue Watching pill).
     LaunchedEffect(state.homeTick, state.items.isEmpty(), state.connected) {
         delay(60)
         val last = state.lastFocusKey?.let { requesters[it] }
         val ok = last != null && runCatching { last.requestFocus() }.isSuccess
         if (!ok) runCatching { firstFocus.requestFocus() }
     }
+
+    // The hero: the focused service's spotlight (what's popular there, one title at a time), or the
+    // focused Continue Watching item. Each service keeps its place in its slideshow.
+    // Before focus lands (and whenever it is up in the top bar), the first tile stands in.
+    val focusedApp = state.focusedApp ?: if (showRow) null else state.pinnedApps.firstOrNull()?.pkg
+    val spot = focusedApp?.let { state.spotlight[it] }?.takeIf { it.isNotEmpty() }
+    val spotIndex = remember { mutableStateMapOf<String, Int>() }
+    LaunchedEffect(focusedApp, spot?.size) {
+        val n = spot?.size ?: return@LaunchedEffect
+        if (focusedApp == null) return@LaunchedEffect
+        while (n > 1) {
+            delay(SPOTLIGHT_MS)
+            spotIndex[focusedApp] = ((spotIndex[focusedApp] ?: 0) + 1) % n
+        }
+    }
+    val hero = when {
+        focusedApp != null -> spot?.getOrNull((spotIndex[focusedApp] ?: 0) % spot.size)
+        showRow -> state.focused ?: state.items.firstOrNull()
+        else -> null
+    }
+    val appLabel = focusedApp?.let { pkg -> state.pinnedApps.firstOrNull { it.pkg == pkg }?.label }
 
     // Colour and frost come from the small card image (the same picture as the 4K backdrop): both are
     // shrunk to ~100-200 px anyway, so decoding the 4K original three times per card change was wasted.
@@ -99,8 +120,9 @@ fun HomeScreen(state: LauncherState) {
 
     // Check title logos ahead of time, so the hero can show them without a text-to-logo swap.
     val context = LocalContext.current
-    LaunchedEffect(state.items) {
-        state.items.mapNotNull { it.logo }.forEach { runCatching { LogoCheck.check(context, it) } }
+    LaunchedEffect(state.items, state.spotlight) {
+        (state.items + state.spotlight.values.flatten()).mapNotNull { it.logo }
+            .forEach { runCatching { LogoCheck.check(context, it) } }
     }
 
     // Pre-blurred copy of the current backdrop, ready before any menu opens.
@@ -142,11 +164,13 @@ fun HomeScreen(state: LauncherState) {
             TopBar(state, modifier = Modifier.zIndex(1f).recede(frostTop).padding(horizontal = EDGE))
             Spacer(Modifier.weight(1f))
             Column(Modifier.recede(frost)) {
-                Hero(hero, state, Modifier.padding(horizontal = EDGE))
+                Hero(hero, appLabel, state, Modifier.padding(horizontal = EDGE))
                 Spacer(Modifier.height(24.dp))
-                ContinueRow(state, firstFocus, focusKey)
-                Spacer(Modifier.height(14.dp))
-                AppsRow(state, focusKey)
+                if (showRow) {
+                    ContinueRow(state, firstFocus, focusKey)
+                    Spacer(Modifier.height(14.dp))
+                }
+                ServiceRow(state, focusKey, firstFocus = if (showRow) null else firstFocus)
             }
         }
     }
@@ -201,15 +225,15 @@ private fun Backdrop(url: String?, paused: Boolean = false) {
 }
 
 /**
- * The hero text glides in with each new show: the old text fades out quickly, the new text fades in and
+ * The hero text glides in with each new title: the old text fades out quickly, the new text fades in and
  * rises slightly, timed to land with the backdrop crossfade.
  */
 @Composable
-private fun Hero(hero: WatchItem?, state: LauncherState, modifier: Modifier) {
+private fun Hero(hero: WatchItem?, appLabel: String?, state: LauncherState, modifier: Modifier) {
     val rise = with(LocalDensity.current) { 12.dp.roundToPx() }
     AnimatedContent(
-        targetState = hero,
-        contentKey = { it?.key },
+        targetState = hero to appLabel,
+        contentKey = { (h, label) -> h?.key ?: label },
         transitionSpec = {
             (fadeIn(tween(420, delayMillis = 120)) +
                 slideInVertically(tween(560, delayMillis = 120, easing = FastOutSlowInEasing)) { rise }) togetherWith
@@ -218,13 +242,20 @@ private fun Hero(hero: WatchItem?, state: LauncherState, modifier: Modifier) {
         contentAlignment = Alignment.BottomStart,
         modifier = modifier,
         label = "hero",
-    ) { h -> HeroBody(h, state) }
+    ) { (h, label) -> HeroBody(h, label, state) }
 }
 
 @Composable
-private fun HeroBody(hero: WatchItem?, state: LauncherState) {
+private fun HeroBody(hero: WatchItem?, appLabel: String?, state: LauncherState) {
     Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (hero == null) {
+            // A service tile without artwork (no TMDB key yet, or offline): just name it.
+            if (appLabel != null) {
+                Text("YOUR APPS", fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, color = Veil.Accent)
+                Text(appLabel, fontSize = 48.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1.6).sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("Press OK to open", fontSize = 14.sp, color = Veil.Text.copy(alpha = 0.85f))
+                return@Column
+            }
             Text("PRIVATE BY DESIGN", fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, color = Veil.Accent)
             Text(
                 if (state.connected) "Welcome back" else "Welcome to Veil",
@@ -237,7 +268,7 @@ private fun HeroBody(hero: WatchItem?, state: LauncherState) {
             return@Column
         }
         Text(
-            when {
+            hero.spotlight?.uppercase() ?: when {
                 hero.isNew -> "NEW EPISODE"
                 hero.upNext -> "UP NEXT"
                 else -> "CONTINUE"
@@ -297,19 +328,17 @@ private fun ContinueRow(state: LauncherState, firstFocus: FocusRequester, focusK
             contentPadding = PaddingValues(start = EDGE, end = EDGE, top = 6.dp, bottom = 8.dp),
             modifier = Modifier.fillMaxWidth().edgeFade(left = listState.canScrollBackward, right = listState.canScrollForward),
         ) {
-            when {
-                !state.connected -> item {
-                    MessagePill("Connect Trakt", "Show what you're watching in Nuvio", state::startConnect, Modifier.focusRequester(firstFocus))
-                }
-                state.items.isEmpty() -> item {
+            if (state.items.isEmpty()) {
+                item {
                     MessagePill(
                         if (state.loading) "Loading…" else (state.error ?: "Nothing in progress"),
                         if (state.loading) "Fetching from Trakt" else "Start something in Nuvio",
                         { state.refreshWatching(force = true) },
-                        Modifier.focusRequester(firstFocus),
+                        Modifier.focusRequester(firstFocus).onFocusChanged { if (it.isFocused) state.focusedApp = null },
                     )
                 }
-                else -> itemsIndexed(state.items, key = { _, it -> it.key }) { index, item ->
+            } else {
+                itemsIndexed(state.items, key = { _, it -> it.key }) { index, item ->
                     WatchPill(
                         item = item,
                         onClick = { state.open(item) },
@@ -317,7 +346,9 @@ private fun ContinueRow(state: LauncherState, firstFocus: FocusRequester, focusK
                         modifier = Modifier
                             .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
                             .remembered(state, "cw:${item.key}", focusKey)
-                            .onFocusChanged { if (it.isFocused) { state.focused = item; state.focusedIndex = index } },
+                            .onFocusChanged {
+                                if (it.isFocused) { state.focused = item; state.focusedIndex = index; state.focusedApp = null }
+                            },
                     )
                 }
             }
@@ -377,28 +408,37 @@ private fun MessagePill(title: String, body: String, onClick: () -> Unit, modifi
     }
 }
 
+/**
+ * The pinned services as big branded tiles (their TV banners), then All apps. Focusing a tile puts
+ * that service's spotlight in the hero; All apps leaves the hero as it is.
+ */
 @Composable
-private fun AppsRow(state: LauncherState, focusKey: (String) -> FocusRequester) {
+private fun ServiceRow(state: LauncherState, focusKey: (String) -> FocusRequester, firstFocus: FocusRequester?) {
     val listState = rememberLazyListState()
     LazyRow(
         state = listState,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(start = EDGE, end = EDGE, top = 6.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(start = EDGE, end = EDGE, top = 8.dp, bottom = 10.dp),
         modifier = Modifier.fillMaxWidth()
             .edgeFade(left = listState.canScrollBackward, right = listState.canScrollForward),
     ) {
-        itemsIndexed(state.pinnedApps, key = { _, a -> a.pkg }) { _, app ->
-            AppPill(
+        itemsIndexed(state.pinnedApps, key = { _, a -> a.pkg }) { index, app ->
+            BannerTile(
                 app = app,
                 onClick = { state.launch(app) },
                 onLongClick = { state.sheet = AppSheet(app, fromHome = true) },
-                modifier = Modifier.remembered(state, "app:${app.pkg}", focusKey),
+                modifier = Modifier.size(TILE_W, TILE_H)
+                    .then(if (index == 0 && firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier)
+                    .remembered(state, "app:${app.pkg}", focusKey)
+                    .onFocusChanged { if (it.isFocused) state.focusedApp = app.pkg },
             )
         }
         item(key = "all-apps") {
-            AllAppsPill(
+            AllAppsTile(
                 onClick = { state.screen = Screen.DRAWER },
-                modifier = Modifier.remembered(state, "all-apps", focusKey),
+                modifier = Modifier.size(TILE_H, TILE_H)
+                    .then(if (state.pinnedApps.isEmpty() && firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier)
+                    .remembered(state, "all-apps", focusKey),
             )
         }
     }
